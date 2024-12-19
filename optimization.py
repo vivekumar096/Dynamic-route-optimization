@@ -1,54 +1,45 @@
-from flask import Flask, request, jsonify
-import googlemaps
-import os
+import requests
 
-app = Flask(__name__)
+# Replace with your OpenRouteService API key
+API_KEY = '5b3ce3597851110001cf6248cafa909e641941f2af1a76b9c97c0907'
+BASE_URL = 'https://api.openrouteservice.org/v2/directions/driving-car'
 
-# Initialize Google Maps API client
-GMAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY"  # Replace with your API key
-gmaps = googlemaps.Client(key=GMAPS_API_KEY)
+# Sample coordinates for start and end points (longitude, latitude)
+# Coordinates for Patna (Boring Road) and Muzaffarpur (Gobarsahi Road)
+start = (85.1467, 25.6077)  # Patna (Longitude, Latitude)
+end = (85.3828, 26.1212)    # Muzaffarpur (Longitude, Latitude)
 
-@app.route("/")
-def home():
-    return "Dynamic Route Optimization API is running."
+def get_route(start, end):
+    headers = {
+        'Authorization': API_KEY
+    }
+    # Define the coordinates for the start and end points in the URL
+    params = {
+        'start': f'{start[0]},{start[1]}',
+        'end': f'{end[0]},{end[1]}'
+    }
+    response = requests.get(BASE_URL, headers=headers, params=params)
+    return response.json()
 
-# Route to get optimized directions
-@app.route('/optimize_route', methods=['POST'])
-def optimize_route():
-    try:
-        data = request.json
-        source = data['source']  # Starting point (latitude, longitude)
-        destination = data['destination']  # Destination point (latitude, longitude)
+def format_route(route_data):
+    # Extract relevant data from the API response
+    if 'features' in route_data and len(route_data['features']) > 0:
+        route = route_data['features'][0]
+        steps = route['properties']['segments'][0]['steps']
+        
+        for step in steps:
+            instruction = step.get('instruction', 'No instruction available')
+            distance = step.get('distance', 0) / 1000  # Convert to km
+            time = step.get('duration', 0) / 60  # Convert to minutes
+            
+            print(f"Instruction: {instruction}")
+            print(f"Distance: {distance:.1f} km")
+            print(f"Time: {int(time)} mins")
+            print("-" * 40)
 
-        # Fetch directions with traffic considerations
-        directions_result = gmaps.directions(
-            source, 
-            destination,
-            mode="driving",
-            departure_time="now",  # Use current time for traffic
-            traffic_model="best_guess"
-        )
+def main():
+    route_data = get_route(start, end)
+    format_route(route_data)
 
-        # Extract relevant route details
-        optimized_route = []
-        for step in directions_result[0]['legs'][0]['steps']:
-            optimized_route.append({
-                "instruction": step['html_instructions'],
-                "distance": step['distance']['text'],
-                "duration": step['duration']['text'],
-                "location": step['end_location']
-            })
-
-        return jsonify({
-            "status": "success",
-            "optimized_route": optimized_route
-        })
-
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        })
-
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    main()
